@@ -15,4 +15,4 @@ Start an HTTP server on port: 8080
 
 To start ssl terminator, import `sslterminator` to the main.go file and call the Helper function
 
-P.S - this is a learning project inspired from [https://github.com/cmpxchg16/go-sslterminator][https://github.com/cmpxchg16/go-sslterminator]
+P.S - this is a learning project inspired from [https://github.com/cmpxchg16/go-sslterminator](https://github.com/cmpxchg16/go-sslterminator)
