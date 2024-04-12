@@ -5,9 +5,16 @@ import (
 	"crypto/tls"
 	"net"
 	"io"
+	"runtime"
+	"time"
 )
 
-func Helper (certPath, keyPath string) {
+func Helper () {
+
+	runtime.GOMAXPROCS(1)
+
+	certPath := "certs/ecdsa_cert.pem"
+	keyPath := "certs/ecdsa_key.pem"
 
 	fmt.Println("Starting ssl terminator")
 
@@ -18,29 +25,48 @@ func Helper (certPath, keyPath string) {
 	}
 
 	tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}, InsecureSkipVerify: true}
-	client, err := tls.Listen("tcp", ":443", &tlsConfig)
+
+	ls, err := tls.Listen("tcp", ":443", &tlsConfig)
 
 	if err != nil {
 		fmt.Println("error in creating tls server", err)
 		return
 	}
-	fmt.Println("client is running on port: 443", client.Addr())
+	fmt.Println("client is running on port: 443", ls.Addr())
 
 	for {
-		conn, err := client.Accept()
+		conn, err := ls.Accept()
 		if err != nil {
 			fmt.Println("error in accepting client connections")
+			//resource released
+			conn.Close()
 			return
 		}
-		fmt.Println("client is running on port: 443", conn.LocalAddr(), conn.RemoteAddr())
-		
 		go sslTerminator(conn)
 	}
 }
 
+func AcceptConnections(ls net.Listener) {
+	for {
+		conn, err := ls.Accept()
+		if err != nil {
+			fmt.Println("error in accepting client connections")
+			return
+		}
+
+		t1 := time.Now()
+		Handshake(conn)
+		t2 := time.Now()
+		fmt.Println(t2.Sub(t1), "time taken for handshake")
+		conn.Close()
+	}
+}
+
 func sslTerminator(clientConn net.Conn) {
-	err := decrypt(clientConn)
+	err := Handshake(clientConn)
 	if err != nil {
+		//resource released
+		clientConn.Close()
 		return
 	}
 	serverConn, err := createServer()
@@ -52,11 +78,12 @@ func sslTerminator(clientConn net.Conn) {
 
 	fmt.Println("server is running on port: 8080", serverConn.LocalAddr())
 
+	//resource release already handled in tunnel
 	go tunnel(clientConn, serverConn)
 	go tunnel(serverConn, clientConn)
 }
 
-func decrypt(conn net.Conn) error {
+func Handshake(conn net.Conn) error {
 	clientConn, ok := conn.(*tls.Conn)
 	if ok {
 		/* this handshake will probably throw error if invoked connection from the browser, 
@@ -67,16 +94,11 @@ func decrypt(conn net.Conn) error {
 		err := clientConn.Handshake()
 		if err != nil {
 			fmt.Println("error in handshake", err)
-			clientConn.Close()
 			return err
 		}
-
-		fmt.Println("tls decrypted")
 		return nil
 	}
-
 	err := fmt.Errorf("error in handshake")
-	clientConn.Close()
 	return err
 }
 
@@ -93,7 +115,7 @@ func createServer() (net.Conn, error) {
 		return serverConn, nil
 }
 
-func tunnel(from, to io.ReadWriteCloser) {
+func tunnel(from io.ReadWriteCloser, to io.ReadWriteCloser) {
 	defer from.Close()
 	defer to.Close()
 	io.Copy(from, to)

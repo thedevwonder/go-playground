@@ -5,5 +5,5 @@ import (
 )
 
 func main () {
-	sslTerminator.Helper("certs/cert.pem", "certs/key.pem")
+	sslTerminator.Helper()
 }
