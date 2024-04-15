@@ -7,20 +7,21 @@ import (
 	"io"
 	"runtime"
 	"time"
+	"os/exec"
 )
 
 func Helper () {
 
 	runtime.GOMAXPROCS(1)
 
-	certPath := "certs/ecdsa_cert.pem"
-	keyPath := "certs/ecdsa_key.pem"
+	certPath := "/Users/theboywonder/Documents/projects/go-playground/sslterminator/certs/ecdsa_cert.pem"
+	keyPath := "/Users/theboywonder/Documents/projects/go-playground/sslterminator/certs/ecdsa_key.pem"
 
 	fmt.Println("Starting ssl terminator")
 
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err!=nil {
-		fmt.Println("error in loading cert")
+		fmt.Println("error in loading cert", err)
 		return
 	}
 
@@ -34,15 +35,29 @@ func Helper () {
 	}
 	fmt.Println("client is running on port: 443", ls.Addr())
 
-	for {
-		conn, err := ls.Accept()
-		if err != nil {
-			fmt.Println("error in accepting client connections")
-			//resource released
-			conn.Close()
-			return
+	go func() {
+		for {
+			t1 := time.Now()
+			conn, err := ls.Accept()
+			t2 := time.Now()
+			fmt.Println(t2.Sub(t1), "time taken for accept")
+			if err != nil {
+				fmt.Println("error in accepting client connections")
+				//resource released
+				conn.Close()
+				return
+			}
+			go sslTerminator(conn)
 		}
-		go sslTerminator(conn)
+	}()
+
+	arg0 := "openssl"
+	arg1 := "s_client"
+	arg2 := "localhost:443"
+	cmd := exec.Command(arg0, arg1, arg2)
+	_, sslErr := cmd.Output()
+	if sslErr != nil {
+		fmt.Println("error in ssl client", sslErr)
 	}
 }
 
@@ -54,10 +69,7 @@ func AcceptConnections(ls net.Listener) {
 			return
 		}
 
-		t1 := time.Now()
 		Handshake(conn)
-		t2 := time.Now()
-		fmt.Println(t2.Sub(t1), "time taken for handshake")
 		conn.Close()
 	}
 }
